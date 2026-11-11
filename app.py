@@ -40,25 +40,26 @@ st.markdown(
             var(--background-color);
     }
     .block-container {
-        max-width: 900px;
-        padding: 2rem 1.25rem 7rem;
+        max-width: 980px;
+        padding: 1.25rem 1.5rem 7rem;
     }
-    .hero {
-        padding: 1.3rem 1.5rem;
-        margin: 0 0 1.5rem;
-        border: 1px solid var(--chat-border);
-        border-radius: 22px;
-        background: color-mix(in srgb, var(--secondary-background-color) 82%, transparent);
+    [data-testid="stSidebar"] {
+        border-right: 1px solid var(--chat-border);
     }
-    .hero h1 {
-        margin: 0;
-        font-size: clamp(1.6rem, 5vw, 2.25rem);
-        letter-spacing: -0.04em;
+    .sidebar-brand {
+        padding: 0.3rem 0 1.2rem;
+        font-size: 1.12rem;
+        font-weight: 700;
+        letter-spacing: -0.03em;
     }
-    .hero p {
-        margin: 0.45rem 0 0;
-        color: var(--text-color);
-        opacity: 0.72;
+    .topbar {
+        display: flex;
+        align-items: center;
+        min-height: 2.75rem;
+        margin-bottom: 1.5rem;
+        font-size: 1rem;
+        font-weight: 650;
+        letter-spacing: -0.02em;
     }
     [data-testid="stChatMessage"] {
         padding: 1rem 1.1rem;
@@ -67,29 +68,51 @@ st.markdown(
         border-radius: 18px;
     }
     [data-testid="stChatInput"] {
-        border-color: var(--chat-border);
-        border-radius: 18px;
+        border: 1px solid var(--chat-border);
+        border-radius: 24px;
+        background: var(--secondary-background-color);
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
     }
     [data-testid="stChatInput"] textarea {
-        min-height: 48px;
+        min-height: 52px;
     }
-    .attachment-note {
-        padding: 0.6rem 0.8rem;
-        border: 1px solid var(--chat-border);
-        border-radius: 12px;
+    .welcome-screen {
+        min-height: min(52vh, 470px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 1rem 0 2rem;
+    }
+    .welcome-screen h1 {
+        margin: 0 0 0.55rem;
+        font-size: clamp(1.8rem, 5vw, 2.25rem);
+        font-weight: 550;
+        letter-spacing: -0.045em;
+    }
+    .welcome-screen p {
+        margin: 0;
+        opacity: 0.68;
+        font-size: 1rem;
+    }
+    .welcome-hint {
+        margin-top: 1.2rem;
         font-size: 0.9rem;
         opacity: 0.8;
     }
     @media (max-width: 640px) {
         .block-container {
-            padding: 1rem 0.7rem 6rem;
+            padding: 0.8rem 0.7rem 6rem;
         }
-        .hero {
-            padding: 1rem;
-            border-radius: 16px;
+        .topbar {
+            margin-bottom: 0.75rem;
         }
         [data-testid="stChatMessage"] {
             padding: 0.8rem;
+        }
+        .welcome-screen {
+            min-height: 40vh;
         }
     }
     </style>
@@ -322,10 +345,19 @@ if not api_key:
 client = get_openai_client(api_key)
 
 with st.sidebar:
-    st.markdown("## ⚙️ Chat settings")
+    st.markdown('<div class="sidebar-brand">✳️ AI Chat</div>', unsafe_allow_html=True)
+    if st.button("＋  New chat", use_container_width=True, type="primary"):
+        st.session_state.messages = [
+            {"role": "system", "content": SYSTEM_PROMPT}
+        ]
+        st.session_state.failed_turn = None
+        st.session_state.generated_project = None
+        st.rerun()
+
+    st.divider()
+    st.markdown("#### Settings")
     model = st.text_input("OpenRouter model", value="openrouter/free")
-    st.caption("Use a model that supports the image, audio, video, or file types you send.")
-    st.caption("Prompts asking to create/build a project automatically generate downloadable files.")
+    st.caption("Choose a model that supports the attachments you send.")
     st.divider()
     if st.button("🗑️ Clear conversation", use_container_width=True):
         st.session_state.messages = [
@@ -335,16 +367,6 @@ with st.sidebar:
         st.session_state.generated_project = None
         st.rerun()
 
-st.markdown(
-    """
-    <div class="hero">
-        <h1>🤖 AI Chatbot</h1>
-        <p>Chat with text, images, video, audio, and documents.</p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "system", "content": SYSTEM_PROMPT}
@@ -353,6 +375,26 @@ if "failed_turn" not in st.session_state:
     st.session_state.failed_turn = None
 if "generated_project" not in st.session_state:
     st.session_state.generated_project = None
+
+st.markdown(
+    '<div class="topbar">AI Chat <span style="opacity:.5;padding-left:.35rem">⌄</span></div>',
+    unsafe_allow_html=True,
+)
+
+has_conversation = any(
+    message["role"] == "user" for message in st.session_state.messages
+)
+if not has_conversation:
+    st.markdown(
+        """
+        <div class="welcome-screen">
+            <h1>What would you like to work on?</h1>
+            <p>Ask a question, explore an idea, or build a project.</p>
+            <div class="welcome-hint">Attach files with the paperclip in the message box.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 for message in st.session_state.messages[1:]:
     render_message(message)
@@ -380,7 +422,7 @@ if st.session_state.failed_turn:
     st.error(st.session_state.failed_turn["error"])
 
 chat_input = st.chat_input(
-    "Write a message or attach files…",
+    "Message AI Chat",
     accept_file="multiple",
     file_type=[
         "png", "jpg", "jpeg", "webp", "gif",
